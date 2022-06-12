@@ -1,0 +1,60 @@
+---
+# - name: kubeadm init
+#   shell: |
+#     kubeadm reset -f
+#   when:
+
+- meta: flush_handlers # to wait for all handlers completed from last roles
+
+- name: Print all available facts
+  ansible.builtin.debug:
+    var: ansible_facts
+- name: Print available facts - env
+  ansible.builtin.debug:
+    var: ansible_facts.env
+- name: Print available facts - fqdn
+  ansible.builtin.debug:
+    var: ansible_facts.fqdn
+- name: Print available facts - hostname
+  ansible.builtin.debug:
+    var: ansible_facts.hostname
+- name: Print available facts - interfaces
+  ansible.builtin.debug:
+    var: ansible_facts.interfaces
+- name: Print available facts - lsb
+  ansible.builtin.debug:
+    var: ansible_facts.lsb
+- name: Print available facts - machine
+  ansible.builtin.debug:
+    var: ansible_facts.machine
+- name: Print available facts - machine_id
+  ansible.builtin.debug:
+    var: ansible_facts.machine_id
+- name: Print available facts - pkg_mgr
+  ansible.builtin.debug:
+    var: ansible_facts.pkg_mgr
+- name: Print available facts - user_dir
+  ansible.builtin.debug:
+    var: ansible_facts.user_dir
+- name: Print available facts - user_shell
+  ansible.builtin.debug:
+    var: ansible_facts.user_shell
+
+- name: install ifmetric tools
+  package:
+    state: latest
+    name:
+      - ifmetric
+- name: make nodes_lan_cidr default - by de-prioritizing the default interface metrics
+  shell: |
+    sudo ifmetric "{{ansible_default_ipv4.interface}}" 150
+  when: ansible_default_ipv4.network != nodes_lan_network
+# - name: change network interfaces order
+#   shell: |
+#     if [ -f /etc/netplan/50-cloud-init.yaml ]; then
+#       if [ -f /etc/netplan/50-vagrant.yaml ]; then
+#         sudo mv /etc/netplan/{50,60}-cloud-init.yaml
+#         sudo netplan apply
+#       fi
+#     fi
+#   when: ansible_default_ipv4.network != nodes_lan_network

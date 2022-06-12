@@ -1,0 +1,3 @@
+---
+- name: info
+  debug: msg="Worker Configured OK"

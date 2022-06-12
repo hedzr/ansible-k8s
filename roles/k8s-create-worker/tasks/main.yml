@@ -1,0 +1,127 @@
+---
+# - name: kubeadm init
+#   shell: |
+#     kubeadm reset -f
+#   when:
+
+- meta: flush_handlers # to wait for all handlers completed from last roles
+
+- name: test if current node is not ready (should we be initializing cluster)
+  shell: |
+    kubectl get node|grep '{{ ansible_hostname }}'
+  register: result
+  ignore_errors: true
+
+- wait_for: host="{{ ansible_hostname }}" port=6443 timeout=1
+  register: port_in_use
+  ignore_errors: true
+- debug: var=port_in_use.failed
+
+# - uri:
+#     url: "https://{{ ansible_hostname }}:6443/"
+#     validate_certs: false
+#     use_proxy: false
+#     method: GET
+#   register: port_in_use
+#   ignore_errors: true
+
+- set_fact:
+    use_kubeadm_init: false
+    use_kubeadm_join: false
+- set_fact:
+    use_kubeadm_init: true
+  when: result.stdout.find(" Ready ") == -1 and port_in_use.failed and k8s.nodes[ansible_hostname].role == 'master'
+- set_fact:
+    use_kubeadm_join: true
+  when: result.stdout.find(" Ready ") == -1 and port_in_use.failed and k8s.nodes[ansible_hostname].role != 'master'
+
+# JOIN
+
+- name: JOIN - mkdir .kube
+  file: path=~/.kube state=directory
+  when: use_kubeadm_join
+- name: JOIN - copy admin.conf
+  copy: src=./.kube/config.master dest=~/.kube/config mode=0600
+  when: use_kubeadm_join
+- name: JOIN - copy admin.conf
+  shell: |
+    if [ -d "/home/{{item}}" ]; then
+      cp -R ~/.kube "/home/{{item}}/"
+      chown -R "{{item}}": "/home/{{item}}"
+    fi
+  when: use_kubeadm_join
+  with_items:
+    - hz
+    - vagrant
+
+- name: JOIN - copy kube.init.ok.log to remote
+  copy: src=.kube/kube.init.ok.log dest=/opt/kube.init.ok.log mode=0600
+  when: use_kubeadm_join
+
+- name: JOIN - slurp kube.init.ok.log
+  slurp: src=/opt/kube.init.ok.log
+  when: use_kubeadm_join
+  register: token_file
+# - debug: msg="{{token_file|b64decode}}"
+#   when: use_kubeadm_join
+- name: JOIN - lookup token
+  set_fact:
+    join_token: "{{ token_file['content']  | b64decode | regex_findall('--token ([a-z0-9:.]+)') | first }}"
+  when: use_kubeadm_join
+- name: JOIN - lookup hash
+  set_fact:
+    join_hash: "{{ token_file['content']  | b64decode | regex_findall('--discovery-token-ca-cert-hash ([a-z0-9:.]+)') | first }}"
+  when: use_kubeadm_join
+- name: JOIN - lookup hash
+  set_fact:
+    join_cert: "{{ token_file['content']  | b64decode | regex_findall('--certificate-key ([a-z0-9:.]+)') | first }}"
+  when: use_kubeadm_join
+
+- debug: var=join_token
+  when: use_kubeadm_join
+- debug: var=join_hash
+  when: use_kubeadm_join
+- debug: var=join_cert
+  when: use_kubeadm_join
+
+- name: JOIN TO MASTER NODE
+  shell: |
+    kubeadm join "{{ apiserver_control_plane_endpoint }}:{{apiserver_main_port}}"\
+      --token "{{ join_token }}" --discovery-token-ca-cert-hash "{{ join_hash }}" --certificate-key "{{ join_cert }}" \
+      --apiserver-advertise-address="{{ apiserver_advertise_address }}" \
+      --v=5
+  when: use_kubeadm_join
+  register: result_kij
+
+- name: JOIN - Save tips to local kube.join.ok.log
+  template: src=kube.join.ok.log.j2 dest=.kube/kube.join.ok.log mode=0644
+  delegate_to: localhost
+  when: use_kubeadm_join and result_kij.changed
+
+- name: JOIN - Save tips to /opt/kube.join.ok.log
+  template: src=kube.join.ok.log.j2 dest=/opt/kube.join.ok.log mode=0600
+  when: use_kubeadm_join and result_kij.changed
+
+- debug: var=result_kij.stdout_lines
+  when: use_kubeadm_join and result_kij.changed
+
+- name: change internal ip
+  shell: |
+    if ! grep -qE '--node=.* ' /var/lib/kubelet/kubeadm-flags.env; then
+      sed -i -r 's/KUBELET_KUBEADM_ARGS="/KUBELET_KUBEADM_ARGS="--node-ip={{host_ip}} /' /var/lib/kubelet/kubeadm-flags.env
+    fi
+  when: ansible_default_ipv4.network != nodes_lan_network
+  # when: (result_kijj.changed or result_kij.changed) and ansible_default_ipv4.network != nodes_lan_network
+  register: internal_ip
+
+- name: restart kubelet.service
+  ansible.builtin.systemd:
+    name: "kubelet.service"
+    state: restarted
+  when: internal_ip.changed
+
+- wait_for: host="{{ ansible_hostname }}" port=8080 timeout=1
+  register: port_in_use
+  ignore_errors: true
+  when: use_kubeadm_join and result_kij.changed
+# - debug: var=port_in_use.failed

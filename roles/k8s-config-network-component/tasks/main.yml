@@ -1,0 +1,96 @@
+---
+- meta: flush_handlers # to wait for all handlers completed from last roles
+
+- name: enable and restart kubelet
+  ansible.builtin.systemd:
+    name: kubelet.service
+    state: started
+    enabled: true
+
+- debug: msg="proxy_env = {{ proxy_env }}"
+
+- name: kubectl get nodes
+  shell: kubectl get node
+  register: result
+- debug: var=result.stdout_lines
+
+# CALICO #########################################
+
+# download from: https://docs.projectcalico.org/v3.23/manifests/calico.yaml
+# and replace/update/modify CALICO_IPV4POOL_CIDR
+- name: gen calico pod config
+  template: src=calico.yaml.j2 dest=/opt/kube-calico.yml  mode=0644
+  when: result.stdout.find(" Ready ") == -1 and k8s.network_component.choice == 'calico'
+
+- name: apply calico pod yaml
+  shell: kubectl apply -f /opt/kube-calico.yml
+  register: apply_calico_result
+  when: result.stdout.find(" Ready ") == -1 and k8s.network_component.choice == 'calico'
+
+- debug: var=apply_calico_result
+  when: result.stdout.find(" Ready ") == -1 and k8s.network_component.choice == 'calico'
+
+# FLANNEL ########################################
+
+# - name: Download flannel pod
+#   get_url:
+#     url: https://raw.githubusercontent.com/flannel-io/flannel/master/Documentation/kube-flannel.yml
+#     dest: /opt/kube-flannel.yml
+#   register: flannel_yaml
+
+# - name: update pod cidr
+#   replace:
+#     path: /opt/kube-flannel.yml
+#     regexp: 10.244.0.0/16
+#     replace: "{{ k8s.pods_subnet_cidr }}"
+#     backup: true
+#   register: flannel_yaml_cidr
+#   when: flannel_yaml.changed
+
+- name: gen flannel pod config
+  template: src=kube-flannel.yml.j2 dest=/opt/kube-flannel.yml mode=0644
+  when: result.stdout.find(" Ready ") == -1 and k8s.network_component.choice == 'flannel'
+
+- name: apply flannel pod yaml
+  shell: kubectl apply -f /opt/kube-flannel.yml
+  register: apply_flannel_result
+  when: result.stdout.find(" Ready ") == -1 and k8s.network_component.choice == 'flannel'
+
+- debug: var=apply_flannel_result
+  when: result.stdout.find(" Ready ") == -1 and k8s.network_component.choice == 'flannel'
+# - debug: var=apply_flannel_result.stdout_lines
+
+# VERIFY ########################################
+
+- name: check and wait node ready
+  when: use_kubeadm_init and (apply_flannel_result.changed or apply_calico_result.changed)
+  shell: "kubectl get nodes | grep '{{ ansible_hostname }}'"
+  register: result
+  until: result.stdout.find(" Ready ") != -1
+  retries: 40
+  delay: 20
+- debug: var=result.stdout_lines
+
+# - name: Write variable to file
+#   local_action: copy content="{{hello}}" dest=~/ansible_logfile
+
+- name: kubectl get nodes
+  shell: kubectl get node -o wide
+  register: result
+- debug: var=result.stdout_lines
+
+- name: "kubectl get flannel/calico state"
+  shell: kubectl get pod -n kube-system | grep -E 'flannel|calico'
+  register: result
+- debug: var=result.stdout_lines
+
+- name: remove master flag from master nodes
+  when: use_kubeadm_init and k8s.remove_master_flag
+  shell: |
+    kubectl taint nodes --all node-role.kubernetes.io/control-plane- node-role.kubernetes.io/master-
+    kubectl taint nodes --all node-role.kubernetes.io/master-
+
+# - name: join into master group
+#   shell: |
+#     echo "kk"
+#   when: use_kubeadm_init

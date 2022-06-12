@@ -1,0 +1,18 @@
+---
+galaxy_info:
+  description: oo
+  license: apache-2.0
+  min_ansible_version: "2.12"
+  platforms:
+    - name: "GenericLinux"
+
+dependencies:
+  - { role: set_args, tags: ["vip", "init", "network"] }
+  - { role: pre-jobs, tags: ["vip", "init", "network"] }
+  # - { role: k8s-config-vip, tags: ["vip", "init", "network"] }
+  - { role: k8s-config-iptables, tags: ["init", "network"] }
+  - { role: k8s-install-tools, tags: ["init", "network"] }
+  - { role: k8s-pull-gcr-images, tags: ["init", "network"] }
+  - { role: k8s-create-worker, tags: ["init", "network"] }
+  - { role: k8s-config-network-component, tags: ["network"] }
+  # - { role: k8s-config-dashboard }

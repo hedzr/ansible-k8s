@@ -1,0 +1,16 @@
+---
+- name: install docker.io
+  apt:
+    state: present
+    pkg:
+      - docker.io
+
+- name: ensure /etc/docker present
+  file:
+    path: /etc/docker
+    state: directory
+
+- name: create daemon.json
+  template: src=daemon.json.j2 dest=/etc/docker/daemon.json mode=0644
+  notify:
+    - restarted and enable docker

@@ -1,0 +1,10 @@
+---
+galaxy_info:
+  description: k8s-install-tools install k8s deps and tools (kubectl, kubeadm, ...)
+  license: apache-2.0
+  min_ansible_version: "2.12"
+  platforms:
+    - name: "GenericLinux"
+
+dependencies:
+  - { role: docker }

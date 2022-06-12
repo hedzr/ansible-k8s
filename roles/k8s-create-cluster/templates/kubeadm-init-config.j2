@@ -1,0 +1,45 @@
+---
+apiVersion: kubeadm.k8s.io/v1beta3
+bootstrapTokens:
+  - groups:
+      - "system:bootstrappers:kubeadm:default-node-token"
+    token: abcdef.0123456789abcdef
+    ttl: 24h0m0s
+    usages:
+      - signing
+      - authentication
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: "{{apiserver_advertise_address}}" # 1.2.3.4
+  bindPort: {{apiserver_main_port}} # 6443
+nodeRegistration:
+  criSocket: /var/run/dockershim.sock
+  imagePullPolicy: IfNotPresent
+  name: {{ ansible_hostname }}
+  taints: null
+---
+apiServer:
+  timeoutForControlPlane: 4m0s
+  # certSANs:
+  #  - '{{apiserver_control_plane_endpoint}}'
+apiVersion: kubeadm.k8s.io/v1beta3
+certificatesDir: /etc/kubernetes/pki
+clusterName: "{{k8s.clusterName}}" # kubernetes
+controllerManager: {}
+dns: { type: CoreDNS }
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+imageRepository: "{{k8s.gcr_image_mirror}}" # registry.cn-hangzhou.aliyuncs.com/google_containers  # k8s.gcr.io
+kind: ClusterConfiguration
+kubernetesVersion: {{ k8s.versions.k8s }} # 1.23.0
+controlPlaneEndpoint: "{{apiserver_control_plane_endpoint}}:{{apiserver_main_port}}"
+networking:
+  dnsDomain: cluster.local
+  serviceSubnet: {{ k8s.service_subnet_cidr }} # "10.96.0.0/12"
+  podSubnet: {{ k8s.pods_subnet_cidr }} # "172.16.0.0/16"
+scheduler: {}
+# ---
+# apiVersion: kubeproxy.config.k8s.io/v1alpha1
+# kind: KubeProxyConfiguration
+# mode: ipvs

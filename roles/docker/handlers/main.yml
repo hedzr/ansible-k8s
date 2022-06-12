@@ -1,0 +1,19 @@
+---
+- name: restarted and enable docker
+  ansible.builtin.systemd:
+    name: docker.service
+    state: restarted
+    enabled: yes
+
+- name: Restart service cron on centos, in all cases, also issue daemon-reload to pick up config changes
+  ansible.builtin.systemd:
+    state: restarted
+    daemon_reload: yes
+    name: crond
+
+- name: Just force systemd to reread configs (2.4 and above)
+  ansible.builtin.systemd:
+    daemon_reload: yes
+
+- name: reload sysctl
+  command: sysctl --system

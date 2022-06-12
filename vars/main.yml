@@ -1,0 +1,90 @@
+---
+# proxy_url: http://192.168.56.1:7890
+proxy_url: ""
+
+proxy_env:
+  http_proxy: "{{ proxy_url }}"
+  https_proxy: "{{ proxy_url }}"
+
+##################################################
+k8s:
+  domain:
+    suffix: local
+
+  nodes:
+    default:
+      role: worker
+      router_id: 51
+      priority: 77
+    k8mm001:
+      ip: 192.168.56.51 # ip-addr in yuor vagrant/virtualbox host network range
+      role: master
+      router_id: 51
+      priority: 99
+    k8mm002: { ip: 192.168.56.52, role: backup, router_id: 51, priority: 77 }
+    k8mm003: { ip: 192.168.56.53, role: backup, router_id: 51, priority: 77 }
+    k8mm004: { ip: 192.168.56.54, role: backup, router_id: 51, priority: 77 }
+    k8mm005: { ip: 192.168.56.55, role: backup, router_id: 51, priority: 77 }
+    k8ss061: { ip: 192.168.56.61, role: worker }
+    k8ss062: { ip: 192.168.56.62, role: worker }
+    k8ss063: { ip: 192.168.56.63, role: worker }
+    k8ss064: { ip: 192.168.56.64, role: worker }
+    k8ss065: { ip: 192.168.56.65, role: worker }
+    k8ss066: { ip: 192.168.56.66, role: worker }
+    k8ss067: { ip: 192.168.56.67, role: worker }
+    k8ss068: { ip: 192.168.56.68, role: worker }
+    k8ss069: { ip: 192.168.56.69, role: worker }
+
+  # mark control-plane node isolation
+  remove_master_flag: false
+
+  network_component:
+    choice: calico # flannel or calico
+
+  # k8s nodes (masters, slaves)
+  nodes_wan_cidr: 10.0.2.0/24 # 10.3.0.0/16 # The NAT Network for internet access
+  nodes_lan_cidr: 192.168.56.0/24 # 根据你的 vagrant host network 网段做修改，即 virtualbox host network 网段
+
+  # k8s pods (k8s inner network)
+  pods_subnet_cidr: 10.32.0.0/16
+  # pods_subnet_cidr: 10.244.0.0/16
+  service_subnet_cidr: 10.96.0.0/16
+
+  virtual_ip:
+    ip: 192.168.56.49
+    domain: k8master
+    auth_pass: random#vip%pass
+
+  clusterName: MoroccoK8S
+  versions:
+    k8s: 1.23.0
+    k8s_apt: 1.23.5-00
+    dashboard: "2.5.1"
+
+  kube_tools_apt:
+    - "kubelet={{ vars['k8s']['versions']['k8s_apt'] }}"
+    - "kubeadm={{ vars['k8s']['versions']['k8s_apt'] }}"
+    - "kubectl={{ vars['k8s']['versions']['k8s_apt'] }}"
+
+  gcr_images:
+    - "k8s.gcr.io/kube-apiserver:v{{ vars['k8s']['versions']['k8s_apt'] }}"
+    - "k8s.gcr.io/kube-controller-manager:v{{ vars['k8s']['versions']['k8s_apt'] }}"
+    - "k8s.gcr.io/kube-scheduler:v{{ vars['k8s']['versions']['k8s_apt'] }}"
+    - "k8s.gcr.io/kube-proxy:v{{ vars['k8s']['versions']['k8s_apt'] }}"
+    - "k8s.gcr.io/pause:3.7"
+    - "k8s.gcr.io/etcd:3.5.3-0"
+    - "k8s.gcr.io/coredns/coredns:v1.8.6"
+  gcr_image_mirror: registry.aliyuncs.com/google_containers
+  pause_ver: 3.7 # 会被自适应调整
+
+  dashboard:
+    nodePort: 30443
+
+  tasks: # never used currently
+    master:
+      - etcd
+      - haproxy
+      - keepalived
+      - virtualip
+    slave:
+      - join

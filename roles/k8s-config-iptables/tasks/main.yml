@@ -1,0 +1,22 @@
+---
+- name: "modprobe ..."
+  shell: |
+    modprobe overlay
+    modprobe br_netfilter
+  register: shell_result
+
+- debug:
+    var: shell_result.stdout_lines
+
+- name: write /etc/modules-load.d/k8s.conf
+  template: src=mod.k8s.conf.j2 dest=/etc/modules-load.d/k8s.conf mode=0644
+
+- name: write /etc/sysctl.d/66.k8s.conf
+  template: src=66.k8s.conf.j2 dest=/etc/sysctl.d/66.k8s.conf mode=0644
+  notify:
+    - reload sysctl
+
+- name: write /etc/sysctl.d/99-kubernetes-cri.conf
+  template: src=99-kubernetes-cri.conf.j2 dest=/etc/sysctl.d/99-kubernetes-cri.conf mode=0644
+  notify:
+    - reload sysctl

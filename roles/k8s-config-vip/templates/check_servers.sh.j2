@@ -1,0 +1,13 @@
+#!/bin/sh
+
+errorExit() {
+	echo "*** $*" 1>&2
+	exit 1
+}
+
+curl --silent --max-time 2 --insecure https://localhost:{{apiserver_main_port}}/healthz -o /dev/null ||
+	errorExit "Error GET (@local) https://localhost:{{apiserver_main_port}}/healthz"
+if ip addr | grep -q {{vip_address}}; then
+	curl --silent --max-time 2 --insecure https://{{vip_address}}:{{apiserver_main_port}}/healthz -o /dev/null ||
+		errorExit "Error GET (@vip) https://{{vip_address}}:{{apiserver_main_port}}/healthz"
+fi

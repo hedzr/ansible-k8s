@@ -1,0 +1,60 @@
+---
+- name: install basic tools
+  package:
+    state: latest
+    name:
+      # - conntrack
+      # - apt-transport-https
+      - ca-certificates
+      - curl
+      - wget
+      - chrony
+
+- name: enable and restart chronyd
+  ansible.builtin.systemd:
+    name: "{{ item }}.service"
+    state: started
+    enabled: true
+  with_items:
+    - chrony # for yum/dnf and centos, it should be 'chronyd'
+
+- name: add kube gpg key
+  ansible.builtin.apt_key:
+    keyserver: keyserver.ubuntu.com
+    id: FEEA9169307EA071
+    state: present
+
+- name: add kube apt mirror
+  template: src=kubernetes.list.j2 dest=/etc/apt/sources.list.d/kubernetes.list  mode=0644
+  vars:
+    mirror_site: mirrors.ustc.edu.cn
+    codename: xenial
+  register: apt_source_list
+
+- name: apt update if necessary
+  shell: apt-get update
+  when: apt_source_list.changed
+
+- debug:
+    var: k8s.kube_tools_apt # k8s.versions.k8s_apt
+
+- name: install kube tools
+  apt:
+    state: present
+    name:
+      - "kubelet={{ vars['k8s']['versions']['k8s_apt'] }}"
+      - "kubeadm={{ vars['k8s']['versions']['k8s_apt'] }}"
+      - "kubectl={{ vars['k8s']['versions']['k8s_apt'] }}"
+  notify:
+    - enable and start kubelet
+
+- name: apt-mark hold kubelet kubeadm kubectl
+  shell: apt-mark hold kubelet kubeadm kubectl
+
+- name: bash completion for kubectl
+  template: src=ZZ10.kubectl-completion.sh.j2 dest=/etc/profile.d/ZZ10.kubectl-completion.sh mode=0644
+- name: zsh completion for kubectl
+  shell: |
+    if [ ! -f /usr/local/share/zsh/site-functions/_kubectl ]; then
+      kubectl completion zsh >/usr/local/share/zsh/site-functions/_kubectl
+    fi

@@ -1,0 +1,217 @@
+---
+# - name: kubeadm init
+#   shell: |
+#     kubeadm reset -f
+#   when:
+
+- meta: flush_handlers # to wait for all handlers completed from last roles
+
+- name: test if current node is not ready (should we be initializing cluster)
+  shell: |
+    kubectl get node|grep '{{ ansible_hostname }}'
+  register: result
+  ignore_errors: true
+
+- wait_for: host="{{ ansible_hostname }}" port=6443 timeout=1
+  register: port_in_use
+  ignore_errors: true
+- debug: var=port_in_use.failed
+
+# - uri:
+#     url: "https://{{ ansible_hostname }}:6443/"
+#     validate_certs: false
+#     use_proxy: false
+#     method: GET
+#   register: port_in_use
+#   ignore_errors: true
+
+- set_fact:
+    use_kubeadm_init: false
+    use_kubeadm_join: false
+- set_fact:
+    use_kubeadm_init: true
+  when: result.stdout.find(" Ready ") == -1 and port_in_use.failed and k8s.nodes[ansible_hostname].role == 'master'
+- set_fact:
+    use_kubeadm_join: true
+  when: result.stdout.find(" Ready ") == -1 and port_in_use.failed and k8s.nodes[ansible_hostname].role != 'master'
+
+# JOIN
+
+- name: JOIN - mkdir .kube
+  file: path=~/.kube state=directory
+  when: use_kubeadm_join
+- name: JOIN - copy admin.conf
+  copy: src=./.kube/config.master dest=~/.kube/config mode=0600
+  when: use_kubeadm_join
+- name: JOIN - copy admin.conf
+  shell: |
+    if [ -d "/home/{{item}}" ]; then
+      cp -R ~/.kube "/home/{{item}}/"
+      chown -R "{{item}}": "/home/{{item}}"
+    fi
+  when: use_kubeadm_join
+  with_items:
+    - hz
+    - vagrant
+
+- name: JOIN - copy kube.init.ok.log to remote
+  copy: src=.kube/kube.init.ok.log dest=/opt/kube.init.ok.log mode=0600
+  when: use_kubeadm_join
+
+- name: JOIN - slurp kube.init.ok.log
+  slurp: src=/opt/kube.init.ok.log
+  when: use_kubeadm_join
+  register: token_file
+# - debug: msg="{{token_file|b64decode}}"
+#   when: use_kubeadm_join
+- name: JOIN - lookup token
+  set_fact:
+    join_token: "{{ token_file['content']  | b64decode | regex_findall('--token ([a-z0-9:.]+)') | first }}"
+  when: use_kubeadm_join
+- name: JOIN - lookup hash
+  set_fact:
+    join_hash: "{{ token_file['content']  | b64decode | regex_findall('--discovery-token-ca-cert-hash ([a-z0-9:.]+)') | first }}"
+  when: use_kubeadm_join
+- name: JOIN - lookup hash
+  set_fact:
+    join_cert: "{{ token_file['content']  | b64decode | regex_findall('--certificate-key ([a-z0-9:.]+)') | first }}"
+  when: use_kubeadm_join
+
+- debug: var=join_token
+  when: use_kubeadm_join
+- debug: var=join_hash
+  when: use_kubeadm_join
+- debug: var=join_cert
+  when: use_kubeadm_join
+
+- name: JOIN TO MASTER NODE
+  shell: |
+    kubeadm join "{{ apiserver_control_plane_endpoint }}:{{apiserver_main_port}}"\
+      --token "{{ join_token }}" --discovery-token-ca-cert-hash "{{ join_hash }}" --certificate-key "{{ join_cert }}" \
+      --apiserver-advertise-address="{{ apiserver_advertise_address }}" \
+      --control-plane \
+      --v=5
+  when: use_kubeadm_join
+  register: result_kij
+
+- name: JOIN - Save tips to local kube.join.ok.log
+  template: src=kube.join.ok.log.j2 dest=.kube/kube.join.ok.log mode=0644
+  delegate_to: localhost
+  when: use_kubeadm_join and result_kij.changed
+
+- name: JOIN - Save tips to /opt/kube.join.ok.log
+  template: src=kube.join.ok.log.j2 dest=/opt/kube.join.ok.log mode=0600
+  when: use_kubeadm_join and result_kij.changed
+
+- debug: var=result_kij.stdout_lines
+  when: use_kubeadm_join and result_kij.changed
+
+# INIT
+
+- name: kubeadm init - config file
+  when: use_kubeadm_init and k8s_host_attrs.role == 'master'
+  template: src=kubeadm-init-config.j2 dest=/opt/kubeadm-init-config.yml mode=0600
+
+- name: kubeadm init - CREATE CLUSTER
+  when: use_kubeadm_init and k8s_host_attrs.role == 'master'
+  shell: |
+    if [ '{{ k8s.pods_subnet_cidr }}' == '' ]; then
+    	kubeadm init \
+    		--v=5 --image-repository='{{ k8s.gcr_image_mirror }}' \
+    		--kubernetes-version '{{ k8s.versions.k8s }}' \
+    		--upload-certs
+    else
+    	#
+    	#
+    	# kubeadm init \
+    	# 	--v=5 --image-repository='{{ k8s.gcr_image_mirror }}' \
+    	# 	--kubernetes-version '{{ k8s.versions.k8s }}' \
+    	# 	--upload-certs \
+    	# 	--pod-network-cidr='{{ k8s.pods_subnet_cidr }}' \
+    	# 	--service-cidr='{{ k8s.service_subnet_cidr }}' \
+      #   --apiserver-advertise-address='{{ apiserver_advertise_address }}' \
+      #   --control-plane-endpoint='{{ apiserver_control_plane_endpoint }}'
+      #
+      kubeadm init --v=5 --upload-certs --config /opt/kubeadm-init-config.yml
+    fi
+  register: result_ki
+
+- name: Save admin config to local kube.admin.conf
+  fetch:
+    src: /etc/kubernetes/admin.conf
+    dest: ./.kube
+  when: use_kubeadm_init and result_ki.changed
+
+- name: Save tips to local kube.init.ok.log
+  template: src=kube.init.ok.log.j2 dest=.kube/kube.init.ok.log mode=0644
+  delegate_to: localhost
+  when: use_kubeadm_init and result_ki.changed
+
+- name: Save tips to /opt/kube.init.ok.log
+  template: src=kube.init.ok.log.j2 dest=/opt/kube.init.ok.log mode=0600
+  when: use_kubeadm_init and result_ki.changed
+
+- name: "fetch kube admin conf to local:.kube/"
+  copy: src=".kube/{{ ansible_hostname }}/etc/kubernetes/admin.conf" dest=".kube/config.master"
+  become: false
+  delegate_to: localhost
+  when: use_kubeadm_init and result_ki.changed
+
+- name: "copy kube admin conf into current user"
+  copy: src=".kube/{{ ansible_hostname }}/etc/kubernetes/admin.conf" dest="~/.kube/config.{{ ansible_hostname }}"
+  become: false
+  delegate_to: localhost
+  when: use_kubeadm_init and result_ki.changed
+
+- debug: var=result_ki.stdout_lines
+  when: use_kubeadm_init and result_ki.changed
+
+- file: path="{{ ansible_env.HOME }}/.kube" state=directory
+  when: use_kubeadm_init # and result_ki.changed
+
+- name: copy kube admin conf into current user
+  copy:
+    src: /etc/kubernetes/admin.conf
+    remote_src: true
+    dest: "{{ ansible_env.HOME }}/.kube/config"
+    owner: "{{ ansible_env.USER }}"
+    mode: "0600"
+  when: use_kubeadm_init
+
+- name: copy kube admin conf into users
+  shell: |
+    if grep -qE '^{{ item }}:' /etc/passwd; then
+      homedir=$(grep -E '^{{ item }}:' /etc/passwd|awk -F: '{print $6}')
+      [ -d $homedir/.kube ] || mkdir -pv $homedir/.kube
+      if [ -f /etc/kubernetes/admin.conf ]; then
+        cp /etc/kubernetes/admin.conf $homedir/.kube/config
+      fi
+      chown -R {{ item }}: $homedir/.kube
+    fi
+  when: (use_kubeadm_init and result_ki.changed) or (use_kubeadm_join and result_kij.changed)
+  with_items:
+    - hz
+    - root
+    - vagrant
+    - ubuntu
+
+- name: change internal ip while multiple interfaces
+  shell: |
+    if ! grep -qE '--node=.* ' /var/lib/kubelet/kubeadm-flags.env; then
+      sed -i -r 's/KUBELET_KUBEADM_ARGS="/KUBELET_KUBEADM_ARGS="--node-ip={{host_ip}} /' /var/lib/kubelet/kubeadm-flags.env
+    fi
+  when: ansible_default_ipv4.network != nodes_lan_network
+  # when: (result_kij.changed or result_ki.changed) and ansible_default_ipv4.network != nodes_lan_network
+  register: internal_ip
+
+- name: restart kubelet.service
+  ansible.builtin.systemd:
+    name: "kubelet.service"
+    state: restarted
+  when: internal_ip.changed
+
+- wait_for: host="{{ ansible_hostname }}" port=8080 timeout=1
+  register: port_in_use
+  ignore_errors: true
+  # when: use_kubeadm_init and result_ki.changed
+# - debug: var=port_in_use.failed

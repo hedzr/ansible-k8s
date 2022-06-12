@@ -1,0 +1,45 @@
+---
+# - name: kubeadm init
+#   shell: |
+#     kubeadm reset -f
+#   when:
+
+- name: Print available facts - userdir
+  ansible.builtin.debug:
+    var: ansible_facts.user_dir
+
+- name: prepare kube-dashboard.yaml
+  template: src=kube-dashboard.yaml.j2 dest=/tmp/kube-dashboard.yaml
+
+- name: print env
+  shell: |
+    pwd
+    whoami
+    echo $KUBECONFIG
+  register: result
+  delegate_to: localhost
+
+- debug: var=result.stdout_lines
+  when: result.changed
+
+- name: apply kube-dashboard.yaml
+  shell: |
+    /usr/local/bin/kubectl apply -f '/tmp/kube-dashboard.yaml'
+  register: result
+  delegate_to: localhost
+
+- debug: var=result.stdout_lines
+  when: result.changed
+
+- name: prepare kube-adminuser.yaml
+  template: src=adminuser.yaml.j2 dest=/tmp/kube-adminuser.yaml
+
+- name: apply kube-adminuser.yaml
+  # become: false
+  shell: |
+    /usr/local/bin/kubectl apply -f '/tmp/kube-adminuser.yaml'
+  register: result
+  delegate_to: localhost
+
+- debug: var=result.stdout_lines
+  when: result.changed

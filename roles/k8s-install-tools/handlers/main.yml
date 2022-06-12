@@ -1,0 +1,17 @@
+---
+- name: restart docker
+  ansible.builtin.systemd:
+    name: docker.service
+    state: restarted
+
+- name: reload sysctl
+  command: sysctl --system
+
+- name: apt update
+  command: apt update
+
+- name: enable and start kubelet
+  ansible.builtin.systemd:
+    name: kubelet.service
+    state: restarted
+    enabled: true

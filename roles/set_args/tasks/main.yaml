@@ -1,0 +1,58 @@
+---
+#
+# print all facts:
+#   ansible -i inventory/hosts.yaml -m debug -a "var=hostvars[inventory_hostname]" all
+#
+- debug: var=ansible_all_ipv4_addresses
+- debug: var=ansible_default_ipv4.address
+
+# {{ '192.0.2.1/24' | ansible.utils.ipaddr('address') }}
+- set_fact:
+    nodes_lan_network: "{{ k8s.nodes_lan_cidr | ansible.utils.ipaddr('network') }}"
+    # nodes_lan_network: "{{ k8s.nodes_lan_cidr | ansible.utils.ipaddr('address') }}"
+    k8s_host_attrs: "{{k8s.nodes[ansible_hostname]}}"
+    vip_address: "{{k8s.virtual_ip.ip}}" # host_ssh_ip: "{{ansible_ssh_host}}" #
+
+- set_fact:
+    allNetworkInterfaces: "{{ ansible_facts | dict2items | selectattr('value.ipv4', 'defined') | map(attribute='value') | list }}"
+    allNetworkInterfaces_variant2: "{{ ansible_facts.interfaces | map('extract', ansible_facts ) | list }}"
+    # interfaceWithKnownIp: "{{ ansible_facts | dict2items | selectattr('value.ipv4', 'defined') | selectattr('value.ipv4.address', 'equalto', host_ssh_ip) | first }}"
+    # interfaceWithKnownIp_fromVar: "{{ allNetworkInterfaces | selectattr('ipv4.address', 'equalto', host_ip) | first }}"
+    # interfacesWithPartialKnowMac: "{{ allNetworkInterfaces | selectattr('macaddress', 'match', knownMacPrefix~'.*') | list }}"
+    # interfacesWitKnowType: "{{ allNetworkInterfaces | selectattr('type', 'equalto', knownType) | sort(attribute='device') | list }}"
+    # extended on 2020-10-28
+    # queryForKnownIpv6: "[*].{device: device, ipv4: ipv4, ipv6: ipv6[? address == 'fe80::a00:27ff:fe38:ad36']}[?ipv6])" # string must be in ' # sorry, only partial interface info, did not find out how to return all info directly
+    # interfacesWithKnownIpv6: "{{ allNetworkInterfaces | json_query(queryForKnownIpv6) | first }}"
+    # queryForKnownIpv4_linux: "[?ipv4.address == '{{ myKnownIpV4 }}']}[?ipv4])" # string must be in '
+    # interfacesWithKnownIp_variantJsonQuery: "{{ allNetworkInterfaces | json_query(queryForKnownIpv4_linux) | first }}"
+
+- debug: var=k8s.nodes_lan_cidr
+- debug: var=nodes_lan_network
+- debug: var=k8s_host_attrs
+
+- set_fact:
+    # interface_lo_vagrant: "{{ allNetworkInterfaces | selectattr('ipv4.address', 'equalto', host_ssh_ip) | first }}"
+    interface: "{{ allNetworkInterfaces | selectattr('ipv4.network', 'equalto', nodes_lan_network) | first }}"
+# - set_fact:
+#     default_interface: "{{ ansible_default_ipv4.interface }}"
+
+# - debug: var=allNetworkInterfaces
+# - debug: var=interface
+# - debug: var=vip_address
+# - debug: var=master_or_backup
+
+- set_fact:
+    interface_device_name: "{{interface.device}}"
+- set_fact:
+    host_ip: "{{interface.ipv4.address}}" # "{{k8s.masters[ansible_hostname].ip}}"
+    host_id: "{{ansible_hostname}}"
+- set_fact:
+    apiserver_health_port: 16443 #
+    apiserver_main_port: 6443 # k8s kube-api port
+    apiserver_advertise_address: "{{interface.ipv4.address}}"
+    apiserver_control_plane_endpoint: "{{vip_address}}"
+
+- debug: var=host_ip
+- debug: var=host_id
+- debug: var=vip_address
+- debug: var=interface_device_name

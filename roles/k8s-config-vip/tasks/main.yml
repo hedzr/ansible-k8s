@@ -1,0 +1,38 @@
+---
+- ansible.builtin.package:
+    name:
+      - keepalived
+      - haproxy
+    state: latest
+
+- set_fact:
+    # master_or_backup: "{{k8s_host_attrs.role}}"
+    # router_id: "{{k8s_host_attrs.router_id}}"
+    # priority: "{{k8s_host_attrs.priority}}"
+    auth_pass: "{{k8s.virtual_ip.auth_pass}}"
+    host_ssh_ip_lo: "{{hostvars[inventory_hostname]['ansible_host']}}" # = ansible_default_ipv4.address|default(ansible_all_ipv4_addresses[0])
+    host_ssh_name_lo: "{{ansible_hostname}}"
+
+- template: src=keepalived.conf.j2 dest=/etc/keepalived/keepalived.conf mode=0644
+  register: f1
+
+- template: src=check_servers.sh.j2 dest=/etc/keepalived/check_servers.sh mode=0755
+  register: f2
+
+- template: src=haproxy.cfg.j2 dest=/etc/haproxy/haproxy.cfg mode=0644
+  register: f3
+
+- name: enable and restart keepalived & haproxy
+  when: f1.changed or f2.changed or f3.changed
+  ansible.builtin.systemd:
+    name: "{{ item }}.service"
+    state: restarted
+    enabled: true
+  with_items:
+    - keepalived
+    - haproxy
+
+- shell: "ip a|grep -E ' inet '"
+  register: result
+- debug: var=result.stdout_lines
+# - set_fact: shell_var="{{shell_var_0}}"

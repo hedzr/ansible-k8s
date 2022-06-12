@@ -1,0 +1,30 @@
+---
+- name: pull gcr.io gcr_images
+  shell: |
+    prefix=docker/desktop-kubernetes-
+    pause_ver="{{ k8s.pause_ver }}"
+    for img in $(kubeadm config images list --kubernetes-version "{{ k8s.versions.k8s }}"); do
+      imgname=$img
+      # imgname=${imgname#k8s.gcr.io/kube-}
+      imgname=${imgname#k8s.gcr.io/coredns/}
+      imgname=${imgname#k8s.gcr.io/}
+      if [ $imgname = pause:* ]; then
+        pause_ver=${imgname#pause:}
+      fi
+      echo "  pulling $img <- {{ k8s.gcr_image_mirror }}/$imgname..."
+      {% raw %}docker images --format '{{.Repository}}:{{.Tag}}' | grep -qE "$img" || {% endraw %}{
+        docker pull {{ k8s.gcr_image_mirror }}/$imgname &&
+          docker tag {{ k8s.gcr_image_mirror }}/$imgname $img &&
+          docker rmi {{ k8s.gcr_image_mirror }}/$imgname
+      }
+    done
+  register: result
+- debug: var=result.stdout_lines
+- name: fix_containerd_sandbox_url
+  replace:
+    path: /etc/containerd/config.toml
+    regexp: 'sandbox_image = "k8s.gcr.io/pause.+'
+    replace: 'sandbox_image = "{{ k8s.gcr_image_mirror }}/pause:{{ k8s.pause_ver }}'
+  ignore_errors: true
+  notify:
+    - restart containerd

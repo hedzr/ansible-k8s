@@ -1,0 +1,31 @@
+---
+#
+- hosts: masters
+  become: true
+  become_method: sudo
+  vars_files:
+    - vars/common.yml
+    - vars/main.yml
+  environment: "{{ proxy_env }}"
+  roles:
+    - role: for-k8s-masters
+    - role: git
+
+- hosts: slaves
+  become: true
+  become_method: sudo
+  vars_files:
+    - vars/main.yml
+  environment: "{{ proxy_env }}"
+  roles:
+    - role: for-k8s-slaves
+    - role: git
+
+- hosts: local
+  become: false
+  vars_files:
+    - vars/common.yml
+    - vars/main.yml
+  environment: "{{ proxy_env }}"
+  roles:
+    - role: install-dashboard
