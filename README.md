@@ -26,9 +26,9 @@
    在顺利完成全部安装步骤之后，应该可以看到就绪的控制平面和数据平面在 nodes 列表中且处于 Ready 状态。
 
    ```bash
-   kubectl get nodes -A
+   kubectl get nodes -o wide
    kubectl get pods -A
-   kubectl get svc -A
+   kubectl get svc
    ```
 
    如果发生意外和错误，通常是因为网络质量不佳导致部分下拉未能完成，则可以单独针对该节点重新执行 ansible 脚本：
