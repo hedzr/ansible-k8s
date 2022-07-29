@@ -6,6 +6,8 @@
 
 依赖于本机上的 vagrant 和 virtualbox 环境，可以就地立即开始试验。
 
+可以自行准备到 Remote Servers 的连接，并自建 `.inventories/hosts` 条目即可。参见 [`定制`](#定制) 一节。
+
 1. 启动虚拟机，应用 ansible 的启动部分：
 
    ```bash
@@ -21,7 +23,8 @@
    # ...
    ```
 
-   vagrant up 将会开设新的虚拟机，并自动应用配套的 ansible 脚本。
+   这将会全部或者逐个地启动虚拟机，如果虚拟机尚未存在则会自动创建。随后会应用 ansible 启动
+   脚本，完成节点的部署任务。
 
    在顺利完成全部安装步骤之后，应该可以看到就绪的控制平面和数据平面在 nodes 列表中且处于 Ready 状态。
 
@@ -39,9 +42,20 @@
 
 2. 安装 dashboard
    此能力尚未有效整理：
+
    ```bash
    ansible-playbook site.yaml --limit local
    ```
+
+3. 推倒重来
+
+   在任何时候均可重新来过：
+
+   ```bash
+   vagrant destroy -f
+   ```
+
+   这将会删除全部有关的虚拟机。
 
 ## 定制
 
