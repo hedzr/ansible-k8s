@@ -1,19 +1,29 @@
 # k8s-ansible
 
+This repo provides a set of ansible scripts (playbook) to setup a 
+high availability kubernetes cluster for mimicking a production
+environment.
+
 通过 ansible 安装 k8s 高可用集群。
 
-## 快速起步
+## Getting Started | 快速起步
+
+It can be run in place with the ready of locally vagrant and
+virtualbox.
 
 依赖于本机上的 vagrant 和 virtualbox 环境，可以就地立即开始试验。
 
-可以自行准备到 Remote Servers 的连接，并自建 `.inventories/hosts` 条目即可。参见 [`定制`](#定制) 一节。
+> You may add/append more ssh connections to remote servers into `.inventories/hosts`.
+>
+> 可以自行准备到 Remote Servers 的连接，并自建 `.inventories/hosts` 条目即可。参见 [`Customize 定制`](#定制) 一节。
 
-1. 启动虚拟机，应用 ansible 的启动部分：
+1. Startup the VM(s) with auto provisioning | 启动虚拟机，应用 ansible 的启动部分：
 
    ```bash
    vagrant up
 
    # 可以逐台虚拟机单独启动，以便仔细审查输出和排除错误
+   # startup the VMs one by one or run all of them once
    vagrant up k8mm001
    vagrant up k8mm002
    vagrant up k8mm003
@@ -28,6 +38,8 @@
 
    在顺利完成全部安装步骤之后，应该可以看到就绪的控制平面和数据平面在 nodes 列表中且处于 Ready 状态。
 
+   After all VMs startup-ed and privisioned, the status of k8s control plane should be in `Ready`.
+
    ```bash
    kubectl get nodes -o wide
    kubectl get pods -A
@@ -36,18 +48,21 @@
 
    如果发生意外和错误，通常是因为网络质量不佳导致部分下拉未能完成，则可以单独针对该节点重新执行 ansible 脚本：
 
+   Sometimes the unexpected matters might be occurred, but you can always provision
+   the VM node again.
+
    ```bash
    vagrant provision k8smm003
    ```
 
-2. 安装 dashboard
+2. To install the k8s dashboard - NOT YET | 安装 dashboard
    此能力尚未有效整理：
 
    ```bash
    ansible-playbook site.yaml --limit local
    ```
 
-3. 推倒重来
+3. Reset to the factory state | 推倒重来
 
    在任何时候均可重新来过：
 
@@ -56,6 +71,8 @@
    ```
 
    这将会删除全部有关的虚拟机。
+
+   **CAUTION**: All VMs will be destooied.
 
 ## 定制
 
