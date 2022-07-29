@@ -9,7 +9,7 @@ Vagrant.configure("2") do |config|
 
 	# BOX_IMAGE = "bento/ubuntu-20.04"
 	BOX_IMAGE = "ubuntu/focal64"
-	# BOX_IMAGE = "hedzr/ubuntu-20-ops-sh"
+	BOX_IMAGE = "hedzr/ubuntu-20-ops-sh"
 
   # The most common configuration options are documented and commented below.
   # For a complete reference, please see the online documentation at
