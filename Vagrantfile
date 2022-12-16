@@ -10,6 +10,8 @@ Vagrant.configure("2") do |config|
 	# BOX_IMAGE = "bento/ubuntu-20.04"
 	BOX_IMAGE = "ubuntu/focal64"
 	BOX_IMAGE = "hedzr/ubuntu-20-ops-sh"
+	BOX_IMAGE = "centos/7"
+	BOX_IMAGE = "centos/8"
 
   # The most common configuration options are documented and commented below.
   # For a complete reference, please see the online documentation at
@@ -101,6 +103,24 @@ Vagrant.configure("2") do |config|
 		"k8ss065" => { "ip"=>"192.168.56.65", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"S", "tasks"=>["slave"] },
 		# "k8ss004", ..., and more
 		
+		"redis01" => { "ip"=>"192.168.56.190", "mem"=>1024, "cpu"=>1, "hdd"=>"40GB", "role"=>"M", "tasks"=>["cache", "sentinel"] },
+		"redis02" => { "ip"=>"192.168.56.191", "mem"=>1024, "cpu"=>1, "hdd"=>"40GB", "role"=>"S", "tasks"=>["cache", "sentinel"] },
+		"redis03" => { "ip"=>"192.168.56.192", "mem"=>1024, "cpu"=>1, "hdd"=>"40GB", "role"=>"S", "tasks"=>["cache", "sentinel"] },
+		"redis04" => { "ip"=>"192.168.56.192", "mem"=>1024, "cpu"=>1, "hdd"=>"40GB", "role"=>"S", "tasks"=>["cache", "sentinel"] },
+		"redis05" => { "ip"=>"192.168.56.192", "mem"=>1024, "cpu"=>1, "hdd"=>"40GB", "role"=>"S", "tasks"=>["cache", "sentinel"] },
+		"redis06" => { "ip"=>"192.168.56.192", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"S", "tasks"=>["cache", "master"], "pair"=>"seq01" },
+		"redis07" => { "ip"=>"192.168.56.192", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"S", "tasks"=>["cache", "slave"], "pair"=>"seq01" },
+		"redis08" => { "ip"=>"192.168.56.192", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"S", "tasks"=>["cache", "master"], "pair"=>"seq02" },
+		"redis09" => { "ip"=>"192.168.56.192", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"S", "tasks"=>["cache", "slave"], "pair"=>"seq02" },
+		
+		"mysql01" => { "ip"=>"192.168.56.180", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"M", "tasks"=>["db", "master"] },
+		"mysql02" => { "ip"=>"192.168.56.181", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"S", "tasks"=>["db", "slave"] },
+		"mysql03" => { "ip"=>"192.168.56.182", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"S", "tasks"=>["db", "slave"] },
+
+		"rmq01" => { "ip"=>"192.168.56.170", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"M", "tasks"=>["rmq", "master"] },
+		"rmq02" => { "ip"=>"192.168.56.171", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"S", "tasks"=>["rmq", "slave"] },
+		"rmq03" => { "ip"=>"192.168.56.172", "mem"=>2048, "cpu"=>2, "hdd"=>"80GB", "role"=>"S", "tasks"=>["rmq", "slave"] },
+
 		# "k8cube01" => { "ip"=>"192.168.56.47", "mem"=>4096, "cpu"=>4, "hdd"=>"80GB", "role"=>"CUBE", "tasks"=>["kubecube"] },
 	}
 
@@ -167,6 +187,7 @@ Vagrant.configure("2") do |config|
 		ansible.config_file = "ansible.cfg"
 		ansible.groups = {
 			"local" => ["localhost"],
+
 			"masters" => ["k8mm00[1:9]"], # masters, control plane
 			"slaves" => ["k8ss0[1:9][1:9]"], # workers, data plane
 			"kubecube" => ["k8cube[0-9][0-9]"],
@@ -175,7 +196,11 @@ Vagrant.configure("2") do |config|
 			},
 			"slaves:vars" => {
 				"etcd_cluster" => etcd_cluster
-			}
+			},
+			
+			"redis-sentinel" => ["redis0[1:9]"],
+			"mysql-cluster" => ["mysql0[1:9]"],
+			"rabbitmq-cluster" => ["rmq0[1:9]"],
 		}
 	end
 
